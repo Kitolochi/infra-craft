@@ -1,0 +1,98 @@
+# =============================================================================
+# CI Pipeline — Lint, Test, Build
+# =============================================================================
+# Runs on every push to main and on every pull request.
+# Tests against Node.js 18.x and 20.x to ensure compatibility.
+# =============================================================================
+
+name: CI
+
+# Trigger conditions:
+# - Push to main: validates that main is always green
+# - Pull requests: validates changes before merge
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Explicit permissions following the principle of least privilege.
+# By default, GitHub Actions tokens have broad permissions.
+# We only need to read the repository contents.
+permissions:
+  contents: read
+
+# Cancel in-progress runs for the same branch/PR.
+# If you push again while CI is running, the old run is cancelled.
+# Saves runner minutes and avoids confusing results.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: CI (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+
+    # Matrix strategy: run the job once per Node.js version.
+    # This catches issues where code works on one version but not another
+    # (e.g., using a Node 20 API that doesn't exist in Node 18).
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      # Step 1: Check out the repository code.
+      # This clones the repo at the commit that triggered the workflow.
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Step 2: Install Node.js and configure npm caching.
+      # Caching node_modules via the built-in npm cache avoids re-downloading
+      # every dependency on each run. Typically saves 30-60 seconds.
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          # This caches ~/.npm (the npm download cache), not node_modules.
+          # npm ci still runs, but downloads are served from cache.
+          cache: npm
+
+      # Step 3: Install dependencies.
+      # `npm ci` (clean install) is required for CI:
+      # - Installs exact versions from package-lock.json
+      # - Fails if lock file is out of sync (catches forgotten lock updates)
+      # - Faster than `npm install` (skips dependency resolution)
+      - name: Install dependencies
+        run: npm ci
+
+      # Step 4: Run linter.
+      # Catches style issues, unused imports, potential bugs.
+      # Fails the build on any lint error so issues are fixed before merge.
+      - name: Lint
+        run: npm run lint
+
+      # Step 5: Run tests with coverage.
+      # --coverage generates a report showing which lines are tested.
+      # We upload this as an artifact so reviewers can check coverage.
+      - name: Run tests
+        run: npm test -- --coverage
+
+      # Step 6: Build the project.
+      # Verifies that TypeScript compiles cleanly with no type errors.
+      # Even if tests pass, the build can fail due to type issues in
+      # non-tested code paths.
+      - name: Build
+        run: npm run build
+
+      # Step 7: Upload test coverage as a build artifact.
+      # Artifacts are downloadable from the GitHub Actions UI.
+      # Only upload from one Node version to avoid duplicate artifacts.
+      - name: Upload coverage report
+        if: matrix.node-version == '20.x'
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          # Keep for 30 days. Adjust based on your retention needs.
+          retention-days: 30

@@ -8,14 +8,14 @@ Status: [x] = built, [ ] = available to build
 
 ## Category 1: Docker
 
-- [ ] **Node.js Dockerfile** — Multi-stage build, Alpine, non-root user, health check.
-- [ ] **Docker Compose Dev** — API + Postgres + Redis with volumes and health checks.
+- [x] **Node.js Dockerfile** — Multi-stage build, Alpine, non-root user, health check. *(built: docker/node-dockerfile)*
+- [x] **Docker Compose Dev** — API + Postgres + Redis with volumes and health checks. *(built: docker/docker-compose-dev)*
 - [ ] **Docker Compose Full Stack** — Frontend + API + DB + Redis + Nginx reverse proxy.
 - [ ] **Docker Build Optimization** — Layer caching, .dockerignore, build args, secrets.
 
 ## Category 2: CI/CD
 
-- [ ] **GitHub Actions — Node.js CI** — Lint, test, build on push/PR. npm cache. Matrix Node versions.
+- [x] **GitHub Actions — Node.js CI** — Lint, test, build on push/PR. npm cache. Matrix Node versions. *(built: ci-cd/github-actions-node)*
 - [ ] **GitHub Actions — Deploy Railway** — CI + auto-deploy to Railway on main push.
 - [ ] **GitHub Actions — Deploy Fly.io** — CI + flyctl deploy with health check.
 - [ ] **GitHub Actions — Docker Build + Push** — Build image, push to GHCR, deploy.
@@ -27,7 +27,7 @@ Status: [x] = built, [ ] = available to build
 - [ ] **OpenTelemetry Setup** — Auto-instrumentation for Express/Fastify, OTLP export.
 - [ ] **Sentry Integration** — Error tracking + performance monitoring for Node.js.
 - [ ] **Prometheus Metrics** — Custom metrics endpoint, histograms, counters.
-- [ ] **Health Check Patterns** — Liveness, readiness, startup probes with dependency checks.
+- [x] **Health Check Patterns** — Liveness, readiness, startup probes with dependency checks. *(built: monitoring/health-checks)*
 - [ ] **Structured Logging** — Pino + OpenTelemetry trace correlation.
 
 ## Category 4: Reverse Proxy
@@ -40,8 +40,8 @@ Status: [x] = built, [ ] = available to build
 
 - [ ] **Railway Config** — railway.toml, env vars, nixpacks config.
 - [ ] **Fly.io Config** — fly.toml, multi-region, auto-scaling, volumes.
-- [ ] **PM2 Ecosystem** — ecosystem.config.js, cluster mode, log rotation.
-- [ ] **Graceful Shutdown** — SIGTERM handling, connection draining, cleanup hooks.
+- [x] **PM2 Ecosystem** — ecosystem.config.js, cluster mode, log rotation. *(built: deployment/pm2-ecosystem)*
+- [x] **Graceful Shutdown** — SIGTERM handling, connection draining, cleanup hooks. *(built: deployment/graceful-shutdown)*
 
 ## Category 6: Infrastructure as Code
 

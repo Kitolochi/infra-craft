@@ -1,0 +1,140 @@
+# =============================================================================
+# Docker Compose — Full Development Environment
+# =============================================================================
+# Spins up the entire stack locally with one command: docker compose up
+#
+# Services:
+#   api       — Node.js TypeScript API with hot reload (tsx watch)
+#   postgres  — PostgreSQL 16 database with health check
+#   redis     — Redis 7 cache/session store with health check
+#   adminer   — Database management UI (http://localhost:8080)
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # API — Your Node.js TypeScript application
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT:-3000}:3000"
+    # Volume mounts for hot reload:
+    # - Bind-mount source so file changes are reflected instantly
+    # - Anonymous volume for node_modules prevents host modules from
+    #   overwriting the container's Linux-compiled modules
+    volumes:
+      - ./src:/app/src
+      - ./package.json:/app/package.json
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DATABASE_URL=postgres://${POSTGRES_USER:-devuser}:${POSTGRES_PASSWORD:-devpass}@postgres:5432/${POSTGRES_DB:-devdb}
+      - REDIS_URL=redis://redis:6379
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+    # depends_on with condition ensures the API doesn't start until
+    # its dependencies are actually ready (not just "started").
+    # Without the health check condition, the API might crash on boot
+    # because Postgres is still initializing.
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # Restart on crash during development so you don't have to manually
+    # restart after fixing a bug that caused a crash.
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  # ---------------------------------------------------------------------------
+  # PostgreSQL — Primary database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      # Expose on host so you can connect with psql, pgAdmin, etc.
+      # Use a non-standard host port to avoid conflicts with a local Postgres.
+      - "${POSTGRES_PORT:-5433}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-devuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpass}
+      POSTGRES_DB: ${POSTGRES_DB:-devdb}
+    # Health check: pg_isready is a Postgres utility that checks if the
+    # server is accepting connections. The API service waits for this.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-devuser} -d ${POSTGRES_DB:-devdb}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    volumes:
+      # Named volume for data persistence across container restarts.
+      # Without this, your data disappears every time the container stops.
+      - postgres-data:/var/lib/postgresql/data
+      # Init scripts run automatically on first start (alphabetical order).
+      # Use this to create tables, seed data, install extensions, etc.
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    networks:
+      - app-network
+
+  # ---------------------------------------------------------------------------
+  # Redis — Cache, sessions, queues
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    ports:
+      # Expose on host so you can connect with redis-cli.
+      - "${REDIS_PORT:-6380}:6379"
+    # --appendonly yes enables AOF persistence so data survives restarts.
+    # --maxmemory 256mb prevents Redis from consuming all available memory.
+    # --maxmemory-policy allkeys-lru evicts least-recently-used keys when full.
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    volumes:
+      # Named volume for Redis persistence (AOF file).
+      - redis-data:/data
+    networks:
+      - app-network
+
+  # ---------------------------------------------------------------------------
+  # Adminer — Lightweight database management UI
+  # ---------------------------------------------------------------------------
+  # Open http://localhost:8080, select PostgreSQL, and enter:
+  #   Server: postgres | User: devuser | Password: devpass | Database: devdb
+  adminer:
+    image: adminer:latest
+    ports:
+      - "${ADMINER_PORT:-8080}:8080"
+    # Adminer only needs network access to the database.
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - app-network
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+# A dedicated bridge network so services can reach each other by name
+# (e.g., the API connects to "postgres:5432" not "172.18.0.3:5432").
+# Also isolates this stack from other Docker containers on the host.
+networks:
+  app-network:
+    driver: bridge
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+# Named volumes persist data across `docker compose down` and `docker compose up`.
+# To wipe data completely: `docker compose down -v`
+volumes:
+  postgres-data:
+  redis-data:

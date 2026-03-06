@@ -1,0 +1,108 @@
+# =============================================================================
+# Deploy Pipeline — Deploy to Railway on Main Push
+# =============================================================================
+# Only runs after a push to main (not on PRs).
+# Requires the CI workflow to pass first before deploying.
+# Uses GitHub environment protection rules for production safety.
+# =============================================================================
+
+name: Deploy
+
+# Trigger: only on pushes to main.
+# Pull requests trigger CI but not deploy — you only deploy merged code.
+on:
+  push:
+    branches: [main]
+
+# Explicit permissions.
+# deployments: write is needed to create GitHub deployment status entries.
+permissions:
+  contents: read
+  deployments: write
+
+# Prevent concurrent deploys.
+# If a second push arrives while deploying, it queues instead of racing.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Gate: Wait for CI to pass
+  # ---------------------------------------------------------------------------
+  # This job checks that the CI workflow succeeded for this commit.
+  # Without this gate, a deploy could start before tests finish.
+  ci-check:
+    name: Verify CI passed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for CI workflow
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          # Must match the `name` field in ci.yml
+          check-name: "CI (Node 20.x)"
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          # Wait up to 10 minutes for CI to complete
+          wait-interval: 15
+          allowed-conclusions: success
+
+  # ---------------------------------------------------------------------------
+  # Deploy to Railway
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to production
+    runs-on: ubuntu-latest
+    needs: ci-check
+
+    # GitHub environment protection rules:
+    # - Configure "production" environment in Settings > Environments
+    # - Add required reviewers for manual approval gates
+    # - Restrict which branches can deploy (only main)
+    # - Add environment secrets (RAILWAY_TOKEN)
+    environment:
+      name: production
+      url: ${{ steps.deploy.outputs.deployment-url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Deploy using the Railway GitHub Action.
+      # Railway auto-detects the project type and builds accordingly.
+      # The RAILWAY_TOKEN secret must be set in the "production" environment.
+      - name: Deploy to Railway
+        id: deploy
+        uses: railwayapp/github-cli@v1
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        with:
+          command: up --detach
+
+      # Post-deploy health check: verify the app is actually responding.
+      # Waits up to 60 seconds for the health endpoint to return 200.
+      # If the deploy succeeded but the app is crashing, this catches it.
+      - name: Health check
+        run: |
+          echo "Waiting for deployment to stabilize..."
+          sleep 15
+
+          HEALTH_URL="${{ vars.PRODUCTION_URL }}/health"
+          MAX_RETRIES=6
+          RETRY_INTERVAL=10
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Health check attempt $i/$MAX_RETRIES..."
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+
+            if [ "$STATUS" = "200" ]; then
+              echo "Health check passed (HTTP 200)"
+              exit 0
+            fi
+
+            echo "Got HTTP $STATUS, retrying in ${RETRY_INTERVAL}s..."
+            sleep $RETRY_INTERVAL
+          done
+
+          echo "Health check failed after $MAX_RETRIES attempts"
+          exit 1

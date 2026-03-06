@@ -1,0 +1,77 @@
+# =============================================================================
+# .dockerignore — Files excluded from the Docker build context
+# =============================================================================
+# Docker sends the entire directory to the daemon as "build context" before
+# building. Excluding unnecessary files makes builds faster and prevents
+# sensitive data from leaking into images.
+# =============================================================================
+
+# --- Version control ---
+# Git history is never needed in a container and can be very large.
+.git
+.gitignore
+
+# --- Dependencies ---
+# We run `npm ci` inside the container for a clean, deterministic install.
+# Copying host node_modules would override that and may include wrong
+# platform binaries (e.g., macOS binaries won't work in Alpine Linux).
+node_modules
+
+# --- Build output ---
+# The container builds its own dist/. Copying a stale local build would
+# shadow the freshly compiled output.
+dist
+build
+
+# --- Environment and secrets ---
+# NEVER bake secrets into an image. Pass them at runtime via env vars or
+# a secrets manager.
+.env
+.env.*
+*.pem
+*.key
+
+# --- IDE and editor files ---
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# --- Docker files ---
+# The Dockerfile itself doesn't need to be inside the image.
+Dockerfile
+Dockerfile.*
+docker-compose*.yml
+.dockerignore
+
+# --- Documentation ---
+# Saves space and avoids leaking internal docs.
+README.md
+CHANGELOG.md
+LICENSE
+docs/
+
+# --- Tests ---
+# Tests don't run in production. Excluding them reduces image size and
+# attack surface (test fixtures sometimes contain fake credentials).
+**/*.test.ts
+**/*.spec.ts
+**/__tests__
+coverage
+.nyc_output
+jest.config.*
+vitest.config.*
+
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+
+# --- CI/CD ---
+.github
+.gitlab-ci.yml
+.circleci
+
+# --- Logs ---
+*.log
+npm-debug.log*
