@@ -1,0 +1,136 @@
+# =============================================================================
+# Docker Compose — Nginx Reverse Proxy + Node.js App Instances
+# =============================================================================
+# Runs nginx in front of two Node.js app instances for load balancing.
+# Start: docker compose up
+#
+# Architecture:
+#   Client → nginx:80 → app1:3000
+#                      → app2:3000
+#
+# Services:
+#   nginx  — Reverse proxy, SSL termination, rate limiting, static files
+#   app1   — First Node.js app instance
+#   app2   — Second Node.js app instance
+#
+# To test load balancing:
+#   for i in $(seq 1 10); do curl -s http://localhost/health | jq .pid; done
+#   (You'll see two different PIDs alternating)
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Nginx — Reverse proxy
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      # Expose port 80 on the host. All traffic enters through nginx.
+      - "80:80"
+      # Uncomment for HTTPS (after adding SSL certificates):
+      # - "443:443"
+    volumes:
+      # Mount our custom nginx config over the default.
+      # :ro (read-only) prevents the container from modifying the config.
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+
+      # Mount the shared proxy parameters file.
+      - ./proxy_params_common:/etc/nginx/proxy_params_common:ro
+
+      # Mount static files directory.
+      # Put your built frontend (HTML, CSS, JS, images) here.
+      # Nginx serves these directly — much faster than routing through Node.js.
+      # - ./static:/usr/share/nginx/html/static:ro
+
+      # Mount SSL certificates (uncomment for HTTPS):
+      # - ./ssl/fullchain.pem:/etc/nginx/ssl/fullchain.pem:ro
+      # - ./ssl/privkey.pem:/etc/nginx/ssl/privkey.pem:ro
+      # - ./ssl/chain.pem:/etc/nginx/ssl/chain.pem:ro
+    depends_on:
+      app1:
+        condition: service_healthy
+      app2:
+        condition: service_healthy
+    # Restart automatically so the proxy layer stays up.
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost/nginx-health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - app-network
+
+  # ---------------------------------------------------------------------------
+  # App Instance 1
+  # ---------------------------------------------------------------------------
+  # A minimal Express server for testing. In a real setup, replace the
+  # image/build with your application image.
+  app1:
+    image: node:20-alpine
+    working_dir: /app
+    # Inline Express server for demonstration.
+    # Replace this with your actual app image and command.
+    command: >
+      sh -c 'cat > server.js << "SCRIPT"
+      const http = require("http");
+      const server = http.createServer((req, res) => {
+        if (req.url === "/health") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ status: "healthy", instance: "app1", pid: process.pid }));
+        } else {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ message: "Hello from app1", pid: process.pid }));
+        }
+      });
+      server.listen(3000, () => console.log("app1 listening on port 3000"));
+      SCRIPT
+      node server.js'
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - app-network
+
+  # ---------------------------------------------------------------------------
+  # App Instance 2
+  # ---------------------------------------------------------------------------
+  app2:
+    image: node:20-alpine
+    working_dir: /app
+    command: >
+      sh -c 'cat > server.js << "SCRIPT"
+      const http = require("http");
+      const server = http.createServer((req, res) => {
+        if (req.url === "/health") {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ status: "healthy", instance: "app2", pid: process.pid }));
+        } else {
+          res.writeHead(200, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ message: "Hello from app2", pid: process.pid }));
+        }
+      });
+      server.listen(3000, () => console.log("app2 listening on port 3000"));
+      SCRIPT
+      node server.js'
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - app-network
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+# All services on the same bridge network so nginx can reach app1/app2
+# by their service name (Docker DNS).
+networks:
+  app-network:
+    driver: bridge

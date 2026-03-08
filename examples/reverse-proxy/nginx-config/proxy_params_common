@@ -1,0 +1,52 @@
+# =============================================================================
+# Common Proxy Parameters — Included in Each Location Block
+# =============================================================================
+# Shared proxy settings extracted into a file to avoid repetition.
+# Each location block that proxies to Node.js includes this file:
+#   include /etc/nginx/proxy_params_common;
+# =============================================================================
+
+# Use HTTP/1.1 for upstream connections (required for keepalive).
+# Without this, nginx uses HTTP/1.0 which creates a new connection
+# for every request, negating the upstream keepalive setting.
+proxy_http_version 1.1;
+
+# Clear the Connection header so keepalive connections work.
+# HTTP/1.1 defaults to keep-alive, but some clients send "Connection: close".
+# We don't want to forward that to the upstream.
+proxy_set_header Connection "";
+
+# Pass the original Host header to the backend.
+# Without this, the backend sees "Host: app1:3000" instead of
+# "Host: example.com" — breaking virtual hosting and cookie domains.
+proxy_set_header Host $host;
+
+# Pass the client's real IP address.
+# Without these headers, the backend sees nginx's IP (172.x.x.x) for every
+# request. X-Real-IP is a single IP; X-Forwarded-For is a chain of proxies.
+proxy_set_header X-Real-IP $remote_addr;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+
+# Tell the backend whether the original request was HTTP or HTTPS.
+# Important for generating correct redirect URLs and setting secure cookies.
+proxy_set_header X-Forwarded-Proto $scheme;
+
+# Proxy buffering: nginx reads the full response from the backend before
+# sending it to the client. This frees the backend to handle the next
+# request instead of waiting for a slow client to download the response.
+proxy_buffering on;
+proxy_buffer_size 4k;
+proxy_buffers 8 4k;
+
+# Timeouts for upstream communication.
+# connect: time to establish TCP connection to backend.
+# send: time to send the request body to backend.
+# read: time to wait for backend to start responding.
+proxy_connect_timeout 10s;
+proxy_send_timeout 30s;
+proxy_read_timeout 30s;
+
+# If one backend is down, try the next one in the upstream group.
+# error = connection error, timeout = read/send timeout.
+proxy_next_upstream error timeout;
+proxy_next_upstream_tries 2;
