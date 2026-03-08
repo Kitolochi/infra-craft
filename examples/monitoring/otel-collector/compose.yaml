@@ -1,0 +1,43 @@
+services:
+  # OpenTelemetry Collector — central telemetry pipeline
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus exporter
+    depends_on:
+      - jaeger
+
+  # Jaeger — distributed tracing UI
+  jaeger:
+    image: jaegertracing/all-in-one:1.54
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686" # Jaeger UI
+      - "4319:4318"   # OTLP HTTP (Jaeger's own, not used directly)
+
+  # Prometheus — metrics scraping
+  prometheus:
+    image: prom/prometheus:v2.50.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"   # Prometheus UI
+    depends_on:
+      - otel-collector
+
+  # Grafana — dashboards
+  grafana:
+    image: grafana/grafana:10.3.1
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    ports:
+      - "3001:3000"   # Grafana UI
+    depends_on:
+      - prometheus
+      - jaeger

@@ -1,0 +1,48 @@
+# OpenTelemetry Collector configuration
+# Receives telemetry via OTLP, exports traces to Jaeger and metrics to Prometheus
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 1024
+
+  # Add resource attributes to all telemetry
+  resource:
+    attributes:
+      - key: deployment.environment
+        value: development
+        action: upsert
+
+exporters:
+  # Traces -> Jaeger
+  otlphttp/jaeger:
+    endpoint: http://jaeger:4318
+
+  # Metrics -> Prometheus scrape endpoint
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Debug output to collector logs
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [otlphttp/jaeger, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch, resource]
+      exporters: [prometheus, debug]
