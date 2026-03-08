@@ -1,0 +1,25 @@
+{
+  "name": "structured-logging-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Structured JSON logging with Pino, request correlation, and Express middleware",
+  "scripts": {
+    "start": "npx tsx src/server.ts",
+    "dev": "npx tsx watch src/server.ts",
+    "dev:pretty": "LOG_PRETTY=true npx tsx watch src/server.ts"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "pino": "^9.5.0",
+    "pino-http": "^10.3.0",
+    "pino-pretty": "^11.3.0",
+    "uuid": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}
