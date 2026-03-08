@@ -1,0 +1,13 @@
+{
+  "name": "chainguard-node-example",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Chainguard vs Alpine Node.js container comparison",
+  "scripts": {
+    "build:alpine": "docker build -f Dockerfile.alpine -t node-alpine .",
+    "build:chainguard": "docker build -f Dockerfile.chainguard -t node-chainguard .",
+    "build:all": "npm run build:alpine && npm run build:chainguard",
+    "compare": "echo '=== Alpine ===' && docker images node-alpine --format 'Size: {{.Size}}' && echo '=== Chainguard ===' && docker images node-chainguard --format 'Size: {{.Size}}'"
+  }
+}

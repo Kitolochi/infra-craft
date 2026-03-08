@@ -1,0 +1,14 @@
+# Alpine-based Node.js — the common default
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package.json ./
+RUN npm install --omit=dev
+COPY server.ts ./
+
+FROM node:20-alpine
+RUN apk add --no-cache tini
+WORKDIR /app
+COPY --from=builder /app .
+USER node
+ENTRYPOINT ["tini", "--"]
+CMD ["node", "--import", "tsx", "server.ts"]

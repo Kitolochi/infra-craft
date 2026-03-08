@@ -1,0 +1,12 @@
+# Chainguard — zero CVE base, no shell, no package manager
+FROM cgr.dev/chainguard/node:latest AS builder
+WORKDIR /app
+COPY package.json ./
+RUN npm install --omit=dev
+COPY server.ts ./
+
+FROM cgr.dev/chainguard/node:latest
+WORKDIR /app
+COPY --from=builder /app .
+# Already runs as non-root (65532), no shell to exploit
+CMD ["--import", "tsx", "server.ts"]
