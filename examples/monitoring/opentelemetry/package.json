@@ -1,0 +1,29 @@
+{
+  "name": "opentelemetry-example",
+  "version": "1.0.0",
+  "private": true,
+  "description": "OpenTelemetry auto-instrumentation with OTLP export to Jaeger/Grafana Tempo",
+  "scripts": {
+    "start": "npx tsx server.ts",
+    "dev": "npx tsx watch server.ts",
+    "infra": "docker compose up -d",
+    "infra:down": "docker compose down"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.50.0",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.54.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.54.0",
+    "@opentelemetry/resources": "^1.27.0",
+    "@opentelemetry/sdk-metrics": "^1.27.0",
+    "@opentelemetry/sdk-node": "^0.54.0",
+    "@opentelemetry/semantic-conventions": "^1.27.0",
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  }
+}

@@ -1,0 +1,53 @@
+# =============================================================================
+# Docker Compose — OpenTelemetry Local Development Stack
+# =============================================================================
+# Spins up Jaeger for viewing traces locally: docker compose up
+#
+# Services:
+#   jaeger — All-in-one Jaeger instance (collector + query + UI)
+#
+# Jaeger accepts OTLP over HTTP on port 4318 and exposes its UI on port 16686.
+# The app sends traces to http://localhost:4318/v1/traces (the default
+# OTEL_EXPORTER_OTLP_ENDPOINT).
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # Jaeger — Distributed tracing backend + UI
+  # ---------------------------------------------------------------------------
+  # The "all-in-one" image runs the collector, query service, and UI in a
+  # single container. Perfect for local development — in production, you'd
+  # run these as separate services with persistent storage.
+  #
+  # Jaeger natively supports OTLP, so no OpenTelemetry Collector is needed
+  # for simple setups. The app sends OTLP directly to Jaeger.
+  jaeger:
+    image: jaegertracing/all-in-one:1.62
+    ports:
+      # OTLP HTTP receiver — where the app sends traces.
+      # The OpenTelemetry SDK sends to http://localhost:4318/v1/traces.
+      - "4318:4318"
+
+      # OTLP gRPC receiver — alternative protocol, slightly faster.
+      # Use if you switch to @opentelemetry/exporter-trace-otlp-grpc.
+      - "4317:4317"
+
+      # Jaeger UI — view traces, search by service, analyze latency.
+      # Open http://localhost:16686 in your browser.
+      - "16686:16686"
+
+      # Jaeger legacy ports (Thrift). Included for compatibility with
+      # older instrumentation libraries that don't support OTLP yet.
+      # - "6831:6831/udp"  # Thrift compact (agent)
+      # - "6832:6832/udp"  # Thrift binary (agent)
+      # - "14268:14268"    # Thrift HTTP (collector)
+    environment:
+      # Enable OTLP receiver. Without this, Jaeger only accepts its
+      # native Thrift format.
+      - COLLECTOR_OTLP_ENABLED=true
+
+      # In-memory storage. Traces are lost on restart — fine for dev.
+      # For production, configure Elasticsearch or Cassandra:
+      # - SPAN_STORAGE_TYPE=elasticsearch
+      # - ES_SERVER_URLS=http://elasticsearch:9200
+    restart: unless-stopped
