@@ -1,0 +1,132 @@
+# =============================================================================
+# Docker Compose — Prometheus Monitoring Stack
+# =============================================================================
+# Start: docker compose up
+#
+# Services:
+#   app         — Node.js API with /metrics endpoint (port 3000)
+#   prometheus  — Metrics collection and storage (port 9090)
+#   grafana     — Dashboards and visualization (port 3001)
+#
+# Access:
+#   App:        http://localhost:3000
+#   Prometheus: http://localhost:9090  (query metrics, check targets)
+#   Grafana:    http://localhost:3001  (admin/admin)
+#
+# Quick test:
+#   1. docker compose up -d
+#   2. curl http://localhost:3000/users          (generate some metrics)
+#   3. Open http://localhost:9090/targets         (verify Prometheus scraping)
+#   4. Query: rate(http_requests_total[5m])       (in Prometheus UI)
+#   5. Open http://localhost:3001                 (build Grafana dashboards)
+# =============================================================================
+
+services:
+  # ---------------------------------------------------------------------------
+  # App — Node.js API with Prometheus metrics
+  # ---------------------------------------------------------------------------
+  app:
+    image: node:20-alpine
+    working_dir: /app
+    volumes:
+      # Mount the source files into the container.
+      - ./server.ts:/app/server.ts:ro
+      - ./package.json:/app/package.json:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+    command: >
+      sh -c 'npm install && npx tsx server.ts'
+    ports:
+      # Expose the app on port 3000 for direct access and testing.
+      # Prometheus scrapes this port internally via Docker networking.
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - monitoring
+
+  # ---------------------------------------------------------------------------
+  # Prometheus — Metrics collection and querying
+  # ---------------------------------------------------------------------------
+  # Prometheus scrapes /metrics from the app every 15 seconds, stores the
+  # data in a local time-series database, and provides PromQL for querying.
+  #
+  # Useful PromQL queries to try in the Prometheus UI:
+  #   rate(http_requests_total[5m])                           — Requests/sec
+  #   histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))  — p99 latency
+  #   http_active_connections                                 — Current connections
+  #   rate(business_events_total{event_type="order_created"}[5m])  — Orders/sec
+  prometheus:
+    image: prom/prometheus:v2.54.0
+    volumes:
+      # Mount our scrape config.
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      # Named volume for data persistence across restarts.
+      # Without this, all historical metrics are lost on container restart.
+      - prometheus-data:/prometheus
+    ports:
+      # Prometheus UI and API.
+      - "9090:9090"
+    # Command-line flags for Prometheus.
+    # --config.file: path to the config (mounted above).
+    # --storage.tsdb.retention.time: how long to keep data. 15 days is fine
+    #   for development. Production might want 30-90 days.
+    # --web.enable-lifecycle: allows config reload via HTTP POST to /-/reload.
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+  # ---------------------------------------------------------------------------
+  # Grafana — Dashboards and visualization
+  # ---------------------------------------------------------------------------
+  # Grafana reads data from Prometheus and displays it in configurable
+  # dashboards. It supports alerting, annotations, and variables.
+  #
+  # First-time setup:
+  #   1. Open http://localhost:3001
+  #   2. Login: admin / admin
+  #   3. Add data source: Prometheus → URL: http://prometheus:9090
+  #   4. Import a dashboard or build your own
+  grafana:
+    image: grafana/grafana:11.2.0
+    ports:
+      # Port 3001 to avoid conflict with the app on 3000.
+      - "3001:3000"
+    environment:
+      # Default admin credentials. Change these in production.
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Auto-provision Prometheus as a data source so you don't have to
+      # add it manually on first login.
+      - GF_DATASOURCES_DEFAULT_NAME=Prometheus
+    volumes:
+      # Persist dashboards and settings across restarts.
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - monitoring
+
+# ---------------------------------------------------------------------------
+# Networks
+# ---------------------------------------------------------------------------
+networks:
+  monitoring:
+    driver: bridge
+
+# ---------------------------------------------------------------------------
+# Volumes
+# ---------------------------------------------------------------------------
+# Named volumes persist data across `docker compose down` and `up`.
+# To wipe all data: `docker compose down -v`
+volumes:
+  prometheus-data:
+  grafana-data:

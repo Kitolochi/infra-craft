@@ -1,0 +1,107 @@
+# =============================================================================
+# Prometheus Configuration — Scrape Targets
+# =============================================================================
+# Prometheus pulls (scrapes) metrics from your app's /metrics endpoint at
+# regular intervals. This file tells Prometheus where to scrape and how often.
+#
+# Key concepts:
+#   scrape_interval — How often Prometheus fetches metrics from each target.
+#   scrape_timeout  — Max time to wait for a /metrics response.
+#   evaluation_interval — How often Prometheus evaluates alerting rules.
+#   targets — The host:port of each service exposing /metrics.
+#
+# After changing this file:
+#   docker compose restart prometheus
+#   (or send SIGHUP to the Prometheus process)
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Global defaults — apply to all scrape jobs unless overridden
+# ---------------------------------------------------------------------------
+global:
+  # Scrape every 15 seconds. This is a good default:
+  # - Fast enough to catch spikes (15s resolution)
+  # - Not so fast that it overwhelms your app or Prometheus storage
+  #
+  # For high-traffic apps, 15s is standard.
+  # For low-traffic or cost-sensitive setups, 30s or 60s is fine.
+  scrape_interval: 15s
+
+  # Timeout per scrape attempt. If /metrics doesn't respond within this
+  # time, the scrape is marked as failed. Should be less than scrape_interval.
+  scrape_timeout: 10s
+
+  # How often to evaluate alerting/recording rules.
+  # Recording rules pre-compute expensive queries (e.g., p99 latency).
+  # Alerting rules check conditions (e.g., error rate > 1%).
+  evaluation_interval: 15s
+
+  # Labels added to all metrics and alerts from this Prometheus instance.
+  # Useful when running multiple Prometheus servers (federated setup).
+  external_labels:
+    environment: "development"
+    region: "local"
+
+# ---------------------------------------------------------------------------
+# Scrape jobs — define what to scrape
+# ---------------------------------------------------------------------------
+# Each job is a group of targets that share the same scrape config.
+# Prometheus adds a "job" label to every metric from that job, so you
+# can filter in PromQL: http_requests_total{job="node-api"}
+scrape_configs:
+  # -------------------------------------------------------------------------
+  # Job: Prometheus self-monitoring
+  # -------------------------------------------------------------------------
+  # Prometheus exposes its own metrics at /metrics.
+  # Useful for monitoring Prometheus itself: scrape duration, storage size,
+  # query latency, etc.
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # -------------------------------------------------------------------------
+  # Job: Node.js API
+  # -------------------------------------------------------------------------
+  # Scrapes your Express app's /metrics endpoint.
+  # The target "app:3000" works because Docker Compose puts all services
+  # on the same network, and Docker DNS resolves "app" to the container IP.
+  - job_name: "node-api"
+
+    # Override the global scrape interval for this job if needed.
+    # scrape_interval: 5s
+
+    # Path to the metrics endpoint. Default is /metrics, which matches
+    # what prom-client exposes. Change if your app uses a different path.
+    metrics_path: /metrics
+
+    static_configs:
+      - targets: ["app:3000"]
+        # Additional labels for this target. These are added to every
+        # metric scraped from this target, useful for grouping/filtering.
+        labels:
+          service: "api"
+          team: "backend"
+
+    # Optional: relabel configs to modify labels before storing.
+    # Example: rename the "instance" label from "app:3000" to "api-main".
+    # relabel_configs:
+    #   - source_labels: [__address__]
+    #     target_label: instance
+    #     replacement: "api-main"
+
+  # -------------------------------------------------------------------------
+  # Job: Additional services (examples)
+  # -------------------------------------------------------------------------
+  # Add more jobs as you add more services to your stack.
+  #
+  # - job_name: "redis"
+  #   static_configs:
+  #     - targets: ["redis-exporter:9121"]
+  #
+  # - job_name: "postgres"
+  #   static_configs:
+  #     - targets: ["postgres-exporter:9187"]
+  #
+  # - job_name: "nginx"
+  #   static_configs:
+  #     - targets: ["nginx-exporter:9113"]
