@@ -24,16 +24,16 @@ Status: [x] = built, [ ] = available to build
 
 ## Category 3: Monitoring
 
-- [ ] **OpenTelemetry Setup** — Auto-instrumentation for Express/Fastify, OTLP export.
+- [x] **OpenTelemetry Setup** — Auto-instrumentation for Express/Fastify, OTLP export. *(built: monitoring/opentelemetry)*
 - [ ] **Sentry Integration** — Error tracking + performance monitoring for Node.js.
-- [ ] **Prometheus Metrics** — Custom metrics endpoint, histograms, counters.
+- [x] **Prometheus Metrics** — Custom metrics endpoint, histograms, counters. *(built: monitoring/prometheus-metrics)*
 - [x] **Health Check Patterns** — Liveness, readiness, startup probes with dependency checks. *(built: monitoring/health-checks)*
 - [ ] **Structured Logging** — Pino + OpenTelemetry trace correlation.
 
 ## Category 4: Reverse Proxy
 
 - [ ] **Caddy Config** — Reverse proxy + auto-HTTPS + custom headers.
-- [ ] **Nginx Config** — Reverse proxy + SSL + rate limiting + caching.
+- [x] **Nginx Config** — Reverse proxy + SSL + rate limiting + caching. *(built: reverse-proxy/nginx-config)*
 - [ ] **Traefik + Docker** — Auto-discovery with Docker labels, Let's Encrypt.
 
 ## Category 5: Deployment
